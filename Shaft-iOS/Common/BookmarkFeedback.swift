@@ -62,13 +62,16 @@ enum BookmarkHaptics {
 }
 
 /// Button style for bookmark hearts: scales down while pressed and plays the
-/// stage-1 haptic the instant the finger lands. Touch-down is tracked with a
-/// never-completing `LongPressGesture` rather than `isPressed`, because inside
-/// a ScrollView SwiftUI delays `isPressed` until the scroll-vs-tap decision —
-/// on a quick tap that arrives together with the release and the two stages
-/// blur into one. The stage-2 haptic lives in the button's action (via
-/// `BookmarkHaptics.commit`) so it only fires on a real tap — never when a
-/// context menu steals the touch or the finger slides off.
+/// stage-1 haptic when the press registers. The stage-2 haptic lives in the
+/// button's action (via `BookmarkHaptics.commit`) so it only fires on a real
+/// tap — never when a context menu steals the touch or the finger slides off.
+///
+/// Press-down is read from `isPressed` only. An earlier version also attached a
+/// never-completing `simultaneousGesture(LongPressGesture(minimumDuration:
+/// .infinity))` to catch touch-down before a ScrollView's scroll-vs-tap delay;
+/// on iOS 27 that gesture swallows the button's own tap, so the heart never
+/// toggled. Inside a ScrollView a quick tap now plays both stages close
+/// together — a fair price for a heart that works.
 struct BookmarkButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         PressTracked(label: configuration.label, isPressed: configuration.isPressed)
@@ -77,18 +80,12 @@ struct BookmarkButtonStyle: ButtonStyle {
     private struct PressTracked<Label: View>: View {
         let label: Label
         let isPressed: Bool
-        @GestureState private var touching = false
 
         var body: some View {
-            let down = touching || isPressed
             label
-                .scaleEffect(down ? 0.84 : 1)
-                .animation(.spring(response: 0.22, dampingFraction: 0.55), value: down)
-                .simultaneousGesture(
-                    LongPressGesture(minimumDuration: .infinity, maximumDistance: 40)
-                        .updating($touching) { value, state, _ in state = value }
-                )
-                .onChange(of: touching) { _, now in
+                .scaleEffect(isPressed ? 0.84 : 1)
+                .animation(.spring(response: 0.22, dampingFraction: 0.55), value: isPressed)
+                .onChange(of: isPressed) { _, now in
                     if now { BookmarkHaptics.pressDown() }
                 }
                 .onAppear { BookmarkHaptics.warmUp() }
