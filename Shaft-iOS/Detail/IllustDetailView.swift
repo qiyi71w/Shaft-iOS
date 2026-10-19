@@ -242,6 +242,9 @@ struct IllustDetailView: View {
     @State private var mute = MuteStore.shared
     @State private var actionBarVisible = true
     @State private var toolbarTitleVisible = false
+    /// Measured height of the top bar row (it grows with Dynamic Type) — the
+    /// floating 「收起」 pill hangs this far below the safe-area top.
+    @State private var topBarHeight: CGFloat = 48
     /// Plain class box, deliberately NOT observable state: the anchor advances
     /// every ~8pt of scroll, and an `@State` write there re-evaluates the whole
     /// page body per scroll tick. Boxed, only the rare `actionBarVisible` flip
@@ -354,7 +357,18 @@ struct IllustDetailView: View {
     /// Floating top bar that replaces the hidden navigation bar (see body): back
     /// and overflow controls as glass capsules over the edge-to-edge hero, with
     /// the title fading in (centered) once the hero scrolls away.
+    ///
+    /// iOS 26+: attached with `safeAreaBar`, so the scroll view draws the system
+    /// soft scroll-edge effect beneath it (see `DetailTopBarHost`). Earlier
+    /// systems have no scroll-edge effect; there it keeps the bar-material band.
     private var detailTopBar: some View {
+        detailTopBarRow
+            .background(alignment: .top) {
+                if #unavailable(iOS 26) { legacyTopBarBackground }
+            }
+    }
+
+    private var detailTopBarRow: some View {
         ZStack {
             Text(vm.illust?.title ?? "")
                 .font(.montserratBold(18))
@@ -378,23 +392,24 @@ struct IllustDetailView: View {
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
-        // Scroll-edge bar background, matching the iOS Settings nav bar exactly:
-        // absent on entry while the hero is immersive, then a uniform bar-material
-        // band with a hairline separator fades in together with the title once the
-        // page scrolls past the hero. No gradient — a crisp, system-style edge.
-        .background(alignment: .top) {
-            Rectangle()
-                .fill(.bar)
-                .overlay(alignment: .bottom) {
-                    Rectangle()
-                        .fill(Color(uiColor: .separator))
-                        .frame(height: 1 / UIScreen.main.scale)
-                }
-                .ignoresSafeArea(edges: .top)
-                .opacity(toolbarTitleVisible ? 1 : 0)
-                .animation(.easeOut(duration: 0.2), value: toolbarTitleVisible)
-                .allowsHitTesting(false)
-        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { topBarHeight = $0 }
+    }
+
+    /// Pre-iOS 26 stand-in for the scroll-edge effect: absent on entry while the
+    /// hero is immersive, then a bar-material band with a hairline separator
+    /// fades in together with the title once the page scrolls past the hero.
+    private var legacyTopBarBackground: some View {
+        Rectangle()
+            .fill(.bar)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(Color(uiColor: .separator))
+                    .frame(height: 1 / UIScreen.main.scale)
+            }
+            .ignoresSafeArea(edges: .top)
+            .opacity(toolbarTitleVisible ? 1 : 0)
+            .animation(.easeOut(duration: 0.2), value: toolbarTitleVisible)
+            .allowsHitTesting(false)
     }
 
     var body: some View {
@@ -529,6 +544,7 @@ struct IllustDetailView: View {
                     handleScroll(offset)
                 }
                 .ignoresSafeArea(.container, edges: .top)
+                .modifier(DetailTopBarHost(pastHero: toolbarTitleVisible) { detailTopBarRow })
                 BottomActionBar(
                     vm: vm,
                     onShowBookmarkSheet: { showBookmarkSheet = true },
@@ -551,7 +567,12 @@ struct IllustDetailView: View {
             // (parity with `fragment_artwork_v3.xml` collapse_pill, gravity top|end).
             .overlay(alignment: .top) {
                 VStack(alignment: .trailing, spacing: 8) {
-                    detailTopBar
+                    if #available(iOS 26, *) {
+                        // The bar itself rides in the scroll view's safeAreaBar.
+                        Color.clear.frame(height: topBarHeight).allowsHitTesting(false)
+                    } else {
+                        detailTopBar
+                    }
                     if pagesAreCollapsible && pagesExpanded {
                         FloatingCollapsePill {
                             withAnimation(.easeInOut(duration: 0.25)) {
@@ -2424,6 +2445,30 @@ struct FlowLayout: Layout {
             s.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
             x += size.width + spacing
             rowH = max(rowH, size.height)
+        }
+    }
+}
+
+/// iOS 26+ top bar hosting for the detail page: the bar rides in a
+/// `safeAreaBar`, so the scroll view draws the system soft scroll-edge effect —
+/// a progressive blur — beneath it instead of a hand-drawn material band.
+///
+/// - The style is `.soft` explicitly: built with the iOS 27 SDK, `automatic`
+///   resolves to the hard, nearly opaque edge for `safeAreaBar`.
+/// - The effect stays hidden until the page scrolls past the hero, so the
+///   edge-to-edge artwork keeps its immersive top on entry.
+private struct DetailTopBarHost<Bar: View>: ViewModifier {
+    let pastHero: Bool
+    @ViewBuilder let bar: () -> Bar
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content
+                .scrollEdgeEffectStyle(.soft, for: .top)
+                .scrollEdgeEffectHidden(!pastHero, for: .top)
+                .safeAreaBar(edge: .top, content: bar)
+        } else {
+            content
         }
     }
 }

@@ -44,7 +44,7 @@ struct WatchLaterView: View {
         }
         .navigationTitle(l10n.t(.watchLaterTitle))
         .navigationBarTitleDisplayMode(.inline)
-        .safeAreaInset(edge: .top, spacing: 0) {
+        .modifier(SoftTopBar {
             // Upstream keeps novels in a second list (`isNovelInWatchLater`).
             Picker("", selection: $section) {
                 Text(l10n.t(.dynTypeIllustManga)).tag(Section.illust)
@@ -53,8 +53,7 @@ struct WatchLaterView: View {
             .pickerStyle(.segmented)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
-            .background(.bar)
-        }
+        })
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Menu {
@@ -107,6 +106,23 @@ struct WatchLaterView: View {
             ScrollView {
                 NovelListContent(novels: store.novelItems, hasMore: false, onLoadMore: nil)
             }
+        }
+    }
+}
+
+/// The section picker pinned under the navigation bar. iOS 26+: a `safeAreaBar`, so the list
+/// scrolls under it with the system soft scroll-edge effect (set explicitly — built with the
+/// iOS 27 SDK, `automatic` turns hard for `safeAreaBar`). Earlier systems: a bar-material inset.
+private struct SoftTopBar<Bar: View>: ViewModifier {
+    @ViewBuilder let bar: () -> Bar
+
+    func body(content: Content) -> some View {
+        if #available(iOS 26, *) {
+            content
+                .scrollEdgeEffectStyle(.soft, for: .top)
+                .safeAreaBar(edge: .top, spacing: 0, content: bar)
+        } else {
+            content.safeAreaInset(edge: .top, spacing: 0) { bar().background(.bar) }
         }
     }
 }
