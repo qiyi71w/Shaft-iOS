@@ -211,6 +211,12 @@ final class IllustDetailViewModel {
     }
 }
 
+/// 「滤镜」要打开的那一页。
+private struct FilterTarget: Hashable {
+    let illust: Illust
+    let page: Int
+}
+
 /// V3-style illust detail (`ArtworkV3Fragment`): pages stack vertically at the
 /// top (multi-page collapses to the first page behind an "expand" pill), then
 /// the title/meta, series, artist (with follow), caption, tags, stats, the
@@ -221,6 +227,7 @@ struct IllustDetailView: View {
     let illustId: Int64
     @State private var vm: IllustDetailViewModel
     @State private var showViewer = false
+    @State private var filterTarget: FilterTarget?
     @State private var viewerIndex = 0
     @State private var showComicReader = false
     @State private var showBookmarkSheet = false
@@ -307,9 +314,9 @@ struct IllustDetailView: View {
     /// Rows of the V3 overflow menu — 1:1 with `ArtworkV3Fragment.showMoreMenu`
     /// (order, labels and actions), rendered by `V3MenuDialog`.
     ///
-    /// Deviation: upstream's last three rows (AI upscale ×2 / "share to plaza")
+    /// Deviation: upstream's AI upscale / AI rembg rows and "share to plaza"
     /// have no iOS counterpart — the first two run a bundled ncnn model, the
-    /// third is behind `Dev.showPlazaShareInArtwork` and the plaza isn't ported.
+    /// third is behind `Dev.showPlazaShareInArtwork`. 「滤镜」 keeps its slot after them.
     private var menuRows: [V3MenuRow] {
         guard let illust = vm.illust else { return [] }
         var rows: [V3MenuRow] = [
@@ -335,6 +342,10 @@ struct IllustDetailView: View {
         if illust.type != "ugoira" {
             rows.append(V3MenuRow(title: l10n.t(.artworkV3LoadOriginal), icon: "eye") {
                 vm.forceOriginalPreview = true
+            })
+            // 动图的 original 是 zip，没有可套滤镜的静图。iOS 详情页没有页码浮标，取首图（同 Android 滑进简介区时的回退）。
+            rows.append(V3MenuRow(title: l10n.t(.imageFilter), icon: "camera.filters") {
+                filterTarget = FilterTarget(illust: illust, page: 0)
             })
         }
         return rows
@@ -594,8 +605,14 @@ struct IllustDetailView: View {
             // it's collapsed).
             ImageViewerView(pages: vm.illust.map(IllustPages.pages(for:)) ?? [],
                             index: $viewerIndex,
-                            ugoiraIllustId: vm.illust?.type == "ugoira" ? vm.illust?.id : nil)
+                            ugoiraIllustId: vm.illust?.type == "ugoira" ? vm.illust?.id : nil,
+                            filterIllust: vm.illust?.type == "ugoira" ? nil : vm.illust)
                 .navigationTransition(.zoom(sourceID: viewerIndex, in: viewerZoom))
+        }
+        // 推到作品页自己所在的导航栈：小说阅读器的 sheet 里打开的作品页也一样能进滤镜页，
+        // 不会推到被阅读器盖住的 tab 栈上（`pushRoute` 只认 tab 栈）。
+        .navigationDestination(item: $filterTarget) { target in
+            ImageFilterView(illust: target.illust, page: target.page)
         }
         .fullScreenCover(isPresented: $showComicReader) {
             if let illust = vm.illust {

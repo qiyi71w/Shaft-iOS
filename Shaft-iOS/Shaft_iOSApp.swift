@@ -19,6 +19,8 @@ struct Shaft_iOSApp: App {
                 ReferralPreviewScreen()
             } else if ProcessInfo.processInfo.arguments.contains("--discover-social-preview") {
                 DiscoverSocialPreview()
+            } else if ProcessInfo.processInfo.arguments.contains("--image-filter-preview") {
+                ImageFilterPreview()
             } else { RootView() }
             #else
             RootView()

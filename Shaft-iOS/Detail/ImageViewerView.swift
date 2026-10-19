@@ -12,11 +12,18 @@ struct ImageViewerView: View {
     /// Ugoira (#1122): page 0 plays the animation with the same pinch / pan /
     /// double-tap zoom as still pages, and keeps playing while zoomed.
     var ugoiraIllustId: Int64? = nil
+    /// 「滤镜」作用于当前这一页（Android 看图页 AI 菜单里的同名项）。动图与没有作品 bean 的调用方传 nil，不摆入口。
+    var filterIllust: Illust? = nil
 
     @Environment(\.dismiss) private var dismiss
     @Environment(OnboardingStore.self) private var l10n
     @State private var saveStatus: SaveStatus = .idle
     @State private var showControls = true
+    @State private var filterPage: FilterPage?
+
+    private struct FilterPage: Identifiable {
+        let id: Int
+    }
 
     enum SaveStatus: Equatable {
         case idle
@@ -68,6 +75,17 @@ struct ImageViewerView: View {
                         .foregroundStyle(.white)
                 }
                 Spacer()
+
+                if filterIllust != nil {
+                    Button { filterPage = FilterPage(id: index) } label: {
+                        FilterIcon(glyph: .photoFilter)
+                            .foregroundStyle(.white)
+                            .frame(width: 22, height: 22)
+                            .frame(width: 44, height: 44)
+                            .background(.black.opacity(0.5), in: .circle)
+                    }
+                    .accessibilityLabel(l10n.t(.imageFilter))
+                }
 
                 if pages.count > 1 {
                     Button {
@@ -127,6 +145,15 @@ struct ImageViewerView: View {
         }
         .preferredColorScheme(.dark)
         .statusBarHidden(true)
+        .fullScreenCover(item: $filterPage) { target in
+            if let illust = filterIllust {
+                NavigationStack {
+                    ImageFilterView(illust: illust, page: target.id) { filterPage = nil }
+                }
+                // 滤镜页跟随系统深浅色，不继承看图页强制的深色（屏幕的 trait 才是系统设置）。
+                .preferredColorScheme(UIScreen.main.traitCollection.userInterfaceStyle == .dark ? .dark : .light)
+            }
+        }
         .onAppear {
             if AppSettingsStore.shared.illustDetailKeepScreenOn {
                 UIApplication.shared.isIdleTimerDisabled = true
