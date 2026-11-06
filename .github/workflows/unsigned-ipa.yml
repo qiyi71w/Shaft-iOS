@@ -1,0 +1,35 @@
+name: Build unsigned IPA
+on: workflow_dispatch
+
+jobs:
+  build:
+    runs-on: xcode-27
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode info
+        run: xcodebuild -version
+
+      - name: Metal toolchain
+        run: xcodebuild -downloadComponent MetalToolchain
+
+      - name: Build (no signing)
+        run: |
+          xcodebuild -project Shaft-iOS.xcodeproj -scheme Shaft-iOS \
+            -configuration Release -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Package IPA
+        run: |
+          mkdir Payload
+          cp -R build/Build/Products/Release-iphoneos/*.app Payload/
+          zip -qry Shaft-unsigned.ipa Payload
+          ls -lh Shaft-unsigned.ipa
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Shaft-unsigned-ipa
+          path: Shaft-unsigned.ipa
