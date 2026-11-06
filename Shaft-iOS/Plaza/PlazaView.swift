@@ -47,7 +47,7 @@ struct PlazaView: View {
                     }
                 }.frame(maxWidth: 720).frame(maxWidth: .infinity).padding(.bottom, 96)
             }
-            .onScrollGeometryChange(for: CGFloat.self) { $0.contentOffset.y } action: { old, new in
+            .onScrollMetricsChange(for: CGFloat.self) { $0.contentOffset.y } action: { old, new in
                 if new <= 0 || new < old - 8 { showFAB = true }
                 else if new > old + 8 { showFAB = false }
             }

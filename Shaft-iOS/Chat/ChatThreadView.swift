@@ -1112,7 +1112,7 @@ struct ChatThreadView: View {
             // strip under the bar crisp. The bar gets an opaque background instead.
             .flippedListEdgeEffectDisabled()
             .scaleEffect(x: 1, y: -1, anchor: .center)
-            .onScrollGeometryChange(for: CGFloat.self) {
+            .onScrollMetricsChange(for: CGFloat.self) {
                 // Flipped space: offset 0 is the newest message.
                 $0.contentOffset.y + $0.contentInsets.top
             } action: { _, distanceFromNewest in

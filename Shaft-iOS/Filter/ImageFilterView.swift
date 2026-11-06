@@ -597,7 +597,7 @@ private struct FadingHScroll<Content: View>: View {
         ScrollView(.horizontal) { content() }
             .scrollIndicators(.hidden)
             .scrollBounceBehavior(.basedOnSize, axes: .horizontal)
-            .onScrollGeometryChange(for: [CGFloat].self) { geo in
+            .onScrollMetricsChange(for: [CGFloat].self) { geo in
                 [geo.contentOffset.x + geo.contentInsets.leading,
                  geo.contentSize.width - geo.containerSize.width - geo.contentOffset.x]
             } action: { _, value in

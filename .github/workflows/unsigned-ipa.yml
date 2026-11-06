@@ -49,10 +49,33 @@ jobs:
             build.log
             errors.txt
 
-      - name: Package IPA
+      - name: Check linkage
         run: |
+          APP=$(ls -d build/Build/Products/Release-iphoneos/*.app)
+          BIN="$APP/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")"
+          /usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$APP/Info.plist"
+          otool -l "$BIN" | awk '/cmd LC_LOAD/{cmd=$2} /name /{print cmd, $2}' | tee linkage.txt
+          # Translation.framework ships in iOS 17.4; a strong link crashes 17.0–17.3 at launch.
+          if grep -E '^LC_LOAD_DYLIB .*Translation' linkage.txt; then echo "Translation is strongly linked"; exit 1; fi
+
+      - name: Package IPA (fakesigned with keychain entitlements)
+        run: |
+          brew install ldid
           mkdir Payload
           cp -R build/Build/Products/Release-iphoneos/*.app Payload/
+          APP=$(ls -d Payload/*.app)
+          BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$APP/Info.plist")
+          BIN="$APP/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Info.plist")"
+          cat > ent.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>application-identifier</key><string>SHAFTLOCAL.$BUNDLE_ID</string>
+            <key>keychain-access-groups</key><array><string>SHAFTLOCAL.$BUNDLE_ID</string></array>
+          </dict></plist>
+          EOF
+          ldid -Sent.plist "$BIN"
+          ldid -e "$BIN"
           zip -qry Shaft-unsigned.ipa Payload
           ls -lh Shaft-unsigned.ipa
 

@@ -628,7 +628,7 @@ struct IllustDetailView: View {
                             index: $viewerIndex,
                             ugoiraIllustId: vm.illust?.type == "ugoira" ? vm.illust?.id : nil,
                             filterIllust: vm.illust?.type == "ugoira" ? nil : vm.illust)
-                .navigationTransition(.zoom(sourceID: viewerIndex, in: viewerZoom))
+                .zoomNavigationTransition(sourceID: viewerIndex, in: viewerZoom)
         }
         // 推到作品页自己所在的导航栈：小说阅读器的 sheet 里打开的作品页也一样能进滤镜页，
         // 不会推到被阅读器盖住的 tab 栈上（`pushRoute` 只认 tab 栈）。
@@ -666,7 +666,7 @@ struct IllustDetailView: View {
         // translator (custom AI, else Google) and shows the result in a WitDialog.
         // Deviation: iOS has no bundled translator, so the same text goes to the
         // system translation sheet, which is the platform-native equivalent.
-        .translationPresentation(isPresented: $showTranslate, text: translateText ?? "")
+        .translationPresentationIfAvailable(isPresented: $showTranslate, text: translateText ?? "")
         // `V3MenuDialog`: a centered 78 %-width card, not a system menu.
         .v3MenuDialog(isPresented: $showMenu, rows: menuRows)
         .sheet(item: $shareItem) { target in
@@ -731,7 +731,7 @@ struct IllustDetailView: View {
             onExpand: { withAnimation(.easeInOut(duration: 0.25)) { pagesExpanded = true } },
             onOpenReader: { showComicReader = true }
         )
-        .matchedTransitionSource(id: 0, in: viewerZoom)
+        .zoomTransitionSource(id: 0, in: viewerZoom)
 
         if !collapsed {
             ForEach(Array(pages.enumerated()).dropFirst(), id: \.offset) { idx, page in
@@ -739,7 +739,7 @@ struct IllustDetailView: View {
                     if tapOpensReader { showComicReader = true }
                     else { viewerIndex = idx; showViewer = true }
                 }
-                .matchedTransitionSource(id: idx, in: viewerZoom)
+                .zoomTransitionSource(id: idx, in: viewerZoom)
             }
             // Collapse is driven by the floating "收起" pill pinned below the
             // toolbar (see `body`), not an in-list button — 1:1 with V3.
@@ -2488,5 +2488,36 @@ struct DetailGlassCircle: View {
             .frame(width: 36, height: 36)
             .background(.regularMaterial, in: .circle)
             .overlay(Circle().stroke(.white.opacity(0.12)))
+    }
+}
+
+// iOS 17 fallbacks: no zoom transition (plain full-screen cover) and, below
+// 17.4, no system translation sheet.
+private extension View {
+    @ViewBuilder
+    func zoomNavigationTransition(sourceID: some Hashable, in namespace: Namespace.ID) -> some View {
+        if #available(iOS 18, *) {
+            navigationTransition(.zoom(sourceID: sourceID, in: namespace))
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func zoomTransitionSource(id: some Hashable, in namespace: Namespace.ID) -> some View {
+        if #available(iOS 18, *) {
+            matchedTransitionSource(id: id, in: namespace)
+        } else {
+            self
+        }
+    }
+
+    @ViewBuilder
+    func translationPresentationIfAvailable(isPresented: Binding<Bool>, text: String) -> some View {
+        if #available(iOS 17.4, *) {
+            translationPresentation(isPresented: isPresented, text: text)
+        } else {
+            self
+        }
     }
 }

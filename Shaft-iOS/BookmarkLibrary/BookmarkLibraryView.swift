@@ -68,7 +68,7 @@ struct BookmarkLibraryView: View {
                 }
                 .padding(.bottom, 12)
             }
-            .onScrollGeometryChange(for: Bool.self) { geometry in
+            .onScrollMetricsChange(for: Bool.self) { geometry in
                 geometry.contentOffset.y <= geometry.contentInsets.top + 4
             } action: { _, atTop in
                 isAtTop = atTop
