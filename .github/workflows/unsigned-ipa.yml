@@ -1,5 +1,11 @@
 name: Build unsigned IPA
-on: workflow_dispatch
+on:
+  workflow_dispatch:
+    inputs:
+      deployment_target:
+        description: "IPHONEOS_DEPLOYMENT_TARGET override (empty = project default)"
+        required: false
+        default: ""
 
 jobs:
   build:
@@ -14,13 +20,34 @@ jobs:
         run: xcodebuild -downloadComponent MetalToolchain
 
       - name: Build (no signing)
+        env:
+          DT: ${{ inputs.deployment_target }}
         run: |
+          set -o pipefail
+          EXTRA=()
+          if [ -n "$DT" ]; then EXTRA+=("IPHONEOS_DEPLOYMENT_TARGET=$DT"); fi
           xcodebuild -project Shaft-iOS.xcodeproj -scheme Shaft-iOS \
             -configuration Release -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" \
-            build
+            "${EXTRA[@]}" \
+            build 2>&1 | tee build.log
+
+      - name: Collect errors
+        if: always()
+        run: |
+          grep -E ': error: ' build.log | sort -u > errors.txt || true
+          echo "unique errors: $(wc -l < errors.txt)"
+          head -100 errors.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: build-log
+          path: |
+            build.log
+            errors.txt
 
       - name: Package IPA
         run: |
